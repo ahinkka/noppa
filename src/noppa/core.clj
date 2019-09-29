@@ -1,5 +1,6 @@
 (ns noppa.core
-  (:require [clojure.math.combinatorics :refer [permutations]]))
+  (:require [clojure.set :refer [union subset?]]
+            [clojure.math.combinatorics :refer [permutations]]))
 
 
 (defn- remove-first-n [pred n coll]
@@ -52,15 +53,30 @@
   {:score (+ score (* 50 (count (filter #(= % 5) faces))))
    :faces (vec (remove #(= % 5) faces))})
 
-(defn evaluate-score-fns [fns faces]
+(defn- evaluate-score-fns [{:keys [score faces fns]}]
   {:pre  [(coll? fns)
           (every? fn? fns)]
    :post [(contains? % :score) (contains? % :faces)]}
   (reduce
    (fn [previous-value fn-]
      (fn- previous-value))
-   {:score 0 :faces faces}
+   {:score score :faces faces}
    fns))
+
+(defn- evaluate-score-fns* [fns previous-results]
+  {:pre  [(set? previous-results)
+          (every? map? previous-results)
+          (coll? fns)
+          (every? fn? fns)]
+   :post [(set? %)
+          (every? #(contains? % :score) %)
+          (every? #(contains? % :faces) %)]}
+  (let [new-results
+        (set (map #(evaluate-score-fns (assoc % :fns fns))
+                  previous-results))]
+    (if (subset? new-results previous-results)
+      previous-results
+      (evaluate-score-fns* fns (union previous-results new-results)))))
 
 (defn score
   "Calculate scoring possibilities and leftover dice faces for a collection of dice faces."
@@ -69,10 +85,10 @@
           (every? int? faces)
           (every? #(>= % 1) faces)
           (every? #(<= % 6) faces)]
-  :post [(set? %)
-         (every? map? %)
-         (every? #(contains? % :score) %)
-         (every? #(contains? % :faces) %)]}
+   :post [(set? %)
+          (every? map? %)
+          (every? #(contains? % :score) %)
+          (every? #(contains? % :faces) %)]}
   (let [fns (list straight
                   three-pairs
                   multiple-ones
@@ -81,4 +97,6 @@
                   fives)
         fn-permutations (permutations fns)
         sorted-vector (vec (sort faces))]
-    (set (map #(evaluate-score-fns % sorted-vector) fn-permutations))))
+    (reduce
+     union
+     (map #(evaluate-score-fns* % #{{:score 0 :faces sorted-vector}}) fn-permutations))))
