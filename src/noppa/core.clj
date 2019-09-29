@@ -19,46 +19,59 @@
     :else false))
 
 (defn- straight [{:keys [score faces]}]
+  {:post [(score-increase-consumes-faces? score (:score %) faces (:faces %))]}
   (if (= faces '[1 2 3 4 5 6])
     {:score 500 :faces '[]}
     {:score score :faces faces}))
 
 (defn- three-pairs [{:keys [score faces]}]
+  {:post [(score-increase-consumes-faces? score (:score %) faces (:faces %))]}
   (if (= 3 (count (filter #(= % 2) (vals (frequencies faces)))))
     {:score 500 :faces '[]}
     {:score score :faces faces}))
 
-(defn- multiple-ones [{:keys [score faces]}]
-  (cond
-    (= (count (filter #(= % 1) faces)) 6)  {:score (+ score 2000) :faces '[]}
-    (>= (count (filter #(= % 1) faces)) 3) {:score (+ score 1000)
-                                            :faces (remove-first-n #(= % 1) 3 faces)}
-    :else                                  {:score score :faces faces}))
-
-(defn- three-or-six-same [{:keys [score faces number]}]
-  (let [number-count (count (filter some? (map-indexed #(if (= %2 number) %1 nil) faces)))]
-    (cond
-      (= number-count 6)  {:score (+ score (* 2 (* 100 number))) :faces '[]}
-      (>= number-count 3) {:score (+ score (* 100 number))
-                           :faces (remove-first-n #(= % number) 3 faces)}
-      :else               {:score score :faces faces})))
+(defn- three-ones [{:keys [score faces]}]
+  {:post [(score-increase-consumes-faces? score (:score %) faces (:faces %))]}
+  (if (>= (count (filter #(= % 1) faces)) 3)
+    {:score (+ score 1000)
+     :faces (remove-first-n #(= % 1) 3 faces)}
+   {:score score :faces faces}))
 
 (defn- three-same [{:keys [score faces]}]
-  (-> {:score score :faces faces}
-      (#(three-or-six-same (assoc % :number 2)))
-      (#(three-or-six-same (assoc % :number 3)))
-      (#(three-or-six-same (assoc % :number 4)))
-      (#(three-or-six-same (assoc % :number 5)))
-      (#(three-or-six-same (assoc % :number 6)))
-      (dissoc :number)))
+  {:post [(score-increase-consumes-faces? score (:score %) faces (:faces %))]}
+  (or
+   (first
+    (filter some?
+            (map (fn [number]
+                   (if (>= (count (filter #(= % number) faces)) 3)
+                     {:score (+ score (* 100 number))
+                      :faces (remove-first-n #(= % number) 3 faces)}
+                     nil))
+                 (range 1 7))))
+   {:score score :faces faces}))
+
+(defn- six-same [{:keys [score faces]}]
+  {:post [(score-increase-consumes-faces? score (:score %) faces (:faces %))]}
+  (or
+   (first
+    (filter some?
+            (map (fn [number]
+                   (if (= (count (filter #(= % number) faces)) 6)
+                     {:score (+ score (* 200 number))
+                      :faces (remove-first-n #(= % number) 6 faces)}
+                     nil))
+                 (range 1 7))))
+   {:score score :faces faces}))
 
 (defn- one [{:keys [score faces]}]
+  {:post [(score-increase-consumes-faces? score (:score %) faces (:faces %))]}
   (if (not-empty (filter #(= % 1) faces))
     {:score (+ score 100)
      :faces (vec (remove-first-n #(= % 1) 1 faces))}
     {:score score :faces faces}))
 
 (defn- five [{:keys [score faces]}]
+  {:post [(score-increase-consumes-faces? score (:score %) faces (:faces %))]}
   (if (not-empty (filter #(= % 5) faces))
     {:score (+ score 50)
      :faces (vec (remove-first-n #(= % 5) 1 faces))}
@@ -93,9 +106,10 @@
           (every? #(contains? % :score) %)
           (every? #(contains? % :faces) %)]}
   (score* (list straight
+                three-ones
                 three-pairs
-                multiple-ones
                 three-same
+                six-same
                 one
                 five)
           #{{:score 0 :faces (vec (sort faces))}}))
