@@ -1,11 +1,13 @@
-(ns noppa.core)
+(ns noppa.core
+  (:require [clojure.math.combinatorics :refer [permutations]]))
+
 
 (defn- remove-first-n [pred n coll]
-  (let [indices (filter some? (map-indexed #(if (pred %2) %1) coll))
+  (let [indices (filter some? (map-indexed #(if (pred %2) %1 nil) coll))
         indices-to-remove (set (take n indices))]
     (vec
      (keep-indexed
-      (fn [idx item] (if (not (contains? indices-to-remove idx)) item))
+      (fn [idx item] (if (not (contains? indices-to-remove idx)) item nil))
       coll))))
 
 (defn- straight [{:keys [score faces]}]
@@ -18,7 +20,7 @@
     {:score 500 :faces '[]}
     {:score score :faces faces}))
 
-(defn- three-ones [{:keys [score faces]}]
+(defn- multiple-ones [{:keys [score faces]}]
   (cond
     (= (count (filter #(= % 1) faces)) 6)  {:score (+ score 2000) :faces '[]}
     (>= (count (filter #(= % 1) faces)) 3) {:score (+ score 1000)
@@ -26,7 +28,7 @@
     :else                                  {:score score :faces faces}))
 
 (defn- three-or-six-same [{:keys [score faces number]}]
-  (let [number-count (count (filter some? (map-indexed #(if (= %2 number) %1) faces)))]
+  (let [number-count (count (filter some? (map-indexed #(if (= %2 number) %1 nil) faces)))]
     (cond
       (= number-count 6)  {:score (+ score (* 2 (* 100 number))) :faces '[]}
       (>= number-count 3) {:score (+ score (* 100 number))
@@ -50,15 +52,33 @@
   {:score (+ score (* 50 (count (filter #(= % 5) faces))))
    :faces (vec (remove #(= % 5) faces))})
 
+(defn evaluate-score-fns [fns faces]
+  {:pre  [(coll? fns)
+          (every? fn? fns)]
+   :post [(contains? % :score) (contains? % :faces)]}
+  (reduce
+   (fn [previous-value fn-]
+     (fn- previous-value))
+   {:score 0 :faces faces}
+   fns))
+
 (defn score
-  "Calculate score for a sequence of dice faces."
+  "Calculate scoring possibilities and leftover dice faces for a collection of dice faces."
   [faces]
-  {:pre  [(or (seq? faces) (vector? faces))
-          (every? int? faces)]}
-  (-> {:score 0 :faces (vec (sort faces))}
-      straight
-      three-ones
-      three-pairs
-      three-same
-      ones
-      fives))
+  {:pre  [(coll? faces)
+          (every? int? faces)
+          (every? #(>= % 1) faces)
+          (every? #(<= % 6) faces)]
+  :post [(set? %)
+         (every? map? %)
+         (every? #(contains? % :score) %)
+         (every? #(contains? % :faces) %)]}
+  (let [fns (list straight
+                  three-pairs
+                  multiple-ones
+                  three-same
+                  ones
+                  fives)
+        fn-permutations (permutations fns)
+        sorted-vector (vec (sort faces))]
+    (set (map #(evaluate-score-fns % sorted-vector) fn-permutations))))
