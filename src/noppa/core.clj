@@ -1,6 +1,5 @@
 (ns noppa.core
-  (:require [clojure.set :refer [union subset?]]
-            [clojure.math.combinatorics :refer [permutations]]))
+  (:require [clojure.set :refer [union subset?]]))
 
 
 (defn- remove-first-n [pred n coll]
@@ -10,6 +9,14 @@
      (keep-indexed
       (fn [idx item] (if (not (contains? indices-to-remove idx)) item nil))
       coll))))
+
+(defn- score-increase-consumes-faces?
+  "Helper post-condition function that can be used for sanity checking scoring."
+  [old-score new-score old-faces new-faces]
+  (cond
+    (and (= old-score new-score) (= (count old-faces) (count new-faces))) true
+    (and (> new-score old-score) (> (count old-faces) (count new-faces))) true
+    :else false))
 
 (defn- straight [{:keys [score faces]}]
   (if (= faces '[1 2 3 4 5 6])
@@ -45,25 +52,19 @@
       (#(three-or-six-same (assoc % :number 6)))
       (dissoc :number)))
 
-(defn- ones [{:keys [score faces]}]
-  {:score (+ score (* 100 (count (filter #(= % 1) faces))))
-   :faces (vec (remove #(= % 1) faces))})
+(defn- one [{:keys [score faces]}]
+  (if (not-empty (filter #(= % 1) faces))
+    {:score (+ score 100)
+     :faces (vec (remove-first-n #(= % 1) 1 faces))}
+    {:score score :faces faces}))
 
-(defn- fives [{:keys [score faces]}]
-  {:score (+ score (* 50 (count (filter #(= % 5) faces))))
-   :faces (vec (remove #(= % 5) faces))})
+(defn- five [{:keys [score faces]}]
+  (if (not-empty (filter #(= % 5) faces))
+    {:score (+ score 50)
+     :faces (vec (remove-first-n #(= % 5) 1 faces))}
+    {:score score :faces faces}))
 
-(defn- evaluate-score-fns [{:keys [score faces fns]}]
-  {:pre  [(coll? fns)
-          (every? fn? fns)]
-   :post [(contains? % :score) (contains? % :faces)]}
-  (reduce
-   (fn [previous-value fn-]
-     (fn- previous-value))
-   {:score score :faces faces}
-   fns))
-
-(defn- evaluate-score-fns* [fns previous-results]
+(defn- score* [fns previous-results]
   {:pre  [(set? previous-results)
           (every? map? previous-results)
           (coll? fns)
@@ -72,11 +73,13 @@
           (every? #(contains? % :score) %)
           (every? #(contains? % :faces) %)]}
   (let [new-results
-        (set (map #(evaluate-score-fns (assoc % :fns fns))
-                  previous-results))]
+        (reduce union
+                (map (fn [previous-result]
+                       (set (map #(% previous-result) fns)))
+                     previous-results))]
     (if (subset? new-results previous-results)
       previous-results
-      (evaluate-score-fns* fns (union previous-results new-results)))))
+      (score* fns (union previous-results new-results)))))
 
 (defn score
   "Calculate scoring possibilities and leftover dice faces for a collection of dice faces."
@@ -89,14 +92,10 @@
           (every? map? %)
           (every? #(contains? % :score) %)
           (every? #(contains? % :faces) %)]}
-  (let [fns (list straight
-                  three-pairs
-                  multiple-ones
-                  three-same
-                  ones
-                  fives)
-        fn-permutations (permutations fns)
-        sorted-vector (vec (sort faces))]
-    (reduce
-     union
-     (map #(evaluate-score-fns* % #{{:score 0 :faces sorted-vector}}) fn-permutations))))
+  (score* (list straight
+                three-pairs
+                multiple-ones
+                three-same
+                one
+                five)
+          #{{:score 0 :faces (vec (sort faces))}}))
