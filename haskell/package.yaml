@@ -1,0 +1,47 @@
+name:                noppa
+version:             0.1.0.0
+github:              "ahinkka/noppa"
+license:             GPL-2
+author:              "Atte Hinkka"
+maintainer:          "atte.hinkka@iki.fi"
+copyright:           "2019 Atte Hinkka"
+
+extra-source-files:
+- README.md
+
+# Metadata used when publishing your package
+# synopsis:            Library for calculating 5 dice game scores
+# category:            Games
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/ahinkka/noppa#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+
+library:
+  source-dirs: src
+
+executables:
+  noppa-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - noppa
+
+tests:
+  noppa-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - noppa
